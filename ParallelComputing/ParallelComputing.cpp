@@ -16,15 +16,15 @@
 #endif
 
 void readInData();
-void printMenu();
-int getMenuChoice();
+void printMenu(bool);
+int getMenuChoice(bool);
 
 int main()
 {
 	int platform_id = 0;
 	int device_id = 0;
 
-	int userChoice = getMenuChoice();
+	int userChoice = getMenuChoice(false);
 
 	cl::Context context = GetContext(platform_id, device_id);
 
@@ -67,9 +67,10 @@ int getMenuChoice(bool clear)
 			cin.clear(); //clear the failure flag if there is an error when reading!
 			string garbage;
 			std::getline(cin, garbage); //read the garbage from the stream and throw it away
+			return -1;
 		}
 	}
-		
+	return -1;
 }
 
 void printMenu(bool clear)
