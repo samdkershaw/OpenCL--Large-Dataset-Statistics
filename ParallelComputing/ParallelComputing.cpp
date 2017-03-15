@@ -62,7 +62,12 @@ int getMenuChoice(bool clear)
 	while (userChoice < 1 || userChoice > 3)
 	{
 		printMenu(false);
-		std::cin >> (int)userChoice;
+		if (!(cin >> userChoice))
+		{
+			cin.clear(); //clear the failure flag if there is an error when reading!
+			string garbage;
+			std::getline(cin, garbage); //read the garbage from the stream and throw it away
+		}
 	}
 		
 }
