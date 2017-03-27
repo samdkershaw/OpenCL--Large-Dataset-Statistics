@@ -4,11 +4,12 @@
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #define __CL_ENABLE_EXCEPTIONS
 
-#define DATASET_LENGTH 18732 
+#define DATASET_LENGTH 18732
 
 #include <iostream>
 #include <vector>
 #include <string>
+#include <limits>
 #include "Utils.h"
 
 #ifdef __APPLE__
@@ -17,19 +18,20 @@
 #include <CL/cl.hpp>
 #endif
 
-void runOperations(int);
 void algorithmOne();
 void readDataFromFile(std::string);
-double minimum(cl::Context, cl::CommandQueue, cl::Program);
-double maximum(cl::Context, cl::CommandQueue, cl::Program);
-double average(cl::Context, cl::CommandQueue, cl::Program);
-double standard_deviation(cl::Context, cl::CommandQueue, cl::Program, double);
+float minimum(cl::Context, cl::CommandQueue, cl::Program);
+float maximum(cl::Context, cl::CommandQueue, cl::Program);
+float average(cl::Context, cl::CommandQueue, cl::Program);
+float standard_deviation(cl::Context, cl::CommandQueue, cl::Program, float);
 
+typedef int mytype;
 std::vector<std::string> locations;
 std::vector<int> years;
 std::vector<int> months;
 std::vector<int> days;
-std::vector<double> temps;
+std::vector<std::string> times;
+std::vector<mytype> temps;
 
 int main()
 {
@@ -55,10 +57,6 @@ int main()
 	} while (userChoice != '0');
 
 	return 0;
-}
-
-void runOperations(int algorithm=1) {
-	
 }
 
 void algorithmOne()
@@ -89,15 +87,24 @@ void algorithmOne()
 			throw err;
 		}
 
+		std::cout << "--> Reserving space in memory for vectors... ";
+		locations.resize(DATASET_LENGTH);
+		years.resize(DATASET_LENGTH);
+		months.resize(DATASET_LENGTH);
+		days.resize(DATASET_LENGTH);
+		times.resize(DATASET_LENGTH);
+		temps.resize(DATASET_LENGTH);
+		std::cout << "Done." << std::endl;
+
 		readDataFromFile("temp_lincolnshire_short.txt");
 		
-		double min = minimum(context, queue, program);
+		float min = minimum(context, queue, program);
 		std::cout << "--> Minimum Value: " << min << std::endl;
-		double max = maximum(context, queue, program);
+		float max = maximum(context, queue, program);
 		std::cout << "--> Maximum Value: " << max << std::endl;
-		double avg = average(context, queue, program);
+		float avg = average(context, queue, program);
 		std::cout << "--> Average Value: " << avg << std::endl;
-		double standard_dev = standard_deviation(context, queue, program, avg);
+		float standard_dev = standard_deviation(context, queue, program, avg);
 		std::cout << "--> Standard Deviation: " << standard_dev << std::endl;
 		
 		//std::cout << "Median Value: " << median << std::endl;
@@ -111,127 +118,83 @@ void algorithmOne()
 void readDataFromFile(std::string filePath)
 {
 	std::ifstream txtFile(filePath);
-	
+
+	std::string location, time;
+	int year, month, day;
+	mytype temp;
+
 	int lineCount = 0;
 
-	if (txtFile.is_open()) 
-	{
-		std::string item, line;
+	std::cout << "--> Vector Size: " << temps.size() << std::endl;
 
-		std::cout << "Lines Read: " << lineCount << "...";
-
-		while (getline(txtFile, line))
-		{
-			std::string location;
-			stringstream _line = stringstream(line);
-
-			int count = 0;
-			while (getline(_line, item, ' '))
-			{
-				switch (count)
-				{
-				case 0:
-					//location
-					locations.push_back(item);
-					count++;
-					break;
-				case 1:
-					//year
-					years.push_back(stoi(item));
-					count++;
-					break;
-				case 2:
-					//month
-					months.push_back(stoi(item));
-					count++;
-					break;
-				case 3:
-					days.push_back(stoi(item));
-					count++;
-				case 4:
-					temps.push_back(stod(item));
-					count = 0;
-					break;
-				default:
-					count = 0;
-					break;
-				}
-			}
-
-			lineCount++;
-
-			if (lineCount % 100000 == 0) {
-				std::cout << "\rLines Read: " << lineCount << "....";
-			}
-		}
+	for (int i = 0; i < DATASET_LENGTH; i++) {
+		txtFile >> locations[i] >> years[i] >> months[i] >> days[i] >> times[i] >> temps[i];
 	}
-	else {
-		std::cout << "Couldn't open the file!!";
-	}
+
+	/*while (txtFile >> location >> year >> month >> day >> time >> temp) {
+		locations.push_back(location);
+		years.push_back(year);
+		months.push_back(month);
+		days.push_back(day);
+		times.push_back(time);
+		temps.push_back(temp);
+	}*/
 
 	txtFile.close();
 
-	std::cout << "\rRead " << lineCount << " lines in successfully." << std::endl;
+	std::cout << "\rRead " << DATASET_LENGTH << " lines in successfully." << std::endl;
+	std::cout << "--> Test: " << temps[DATASET_LENGTH-1] << std::endl;
+	system("pause");
 }
 
-double minimum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
+float minimum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
 {
-	// Sets vector, local size and padding size
-	vector<double> tempTempTemp = temps;
-	size_t localSize = 256;
-	size_t paddingSize = tempTempTemp.size() % localSize;
+	return 0.0;
+}
 
-	// Adds padding to the vector
-	if (paddingSize)
-	{
-		std::vector<double> temp(localSize - paddingSize, INT_MAX);
-		tempTempTemp.insert(tempTempTemp.end(), temp.begin(), temp.end());
+float maximum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
+{
+	return 0.0;
+}
+
+float average(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
+{
+	std::vector<mytype> temp_temps = temps;
+	std::cout << "temp_temps.size() = " << temp_temps.size() << std::endl;
+	size_t local_size = 256;
+	size_t padding_size = temp_temps.size() % local_size;
+
+	if (padding_size) {
+		std::vector<mytype> temp(local_size - padding_size, 0);
+		temp_temps.insert(temp_temps.end(), temp.begin(), temp.end());
 	}
 
-	// Sets the input elemtents and size of input
-	size_t inputElements = tempTempTemp.size();
-	size_t inputSize = tempTempTemp.size() * sizeof(double);
+	size_t input = temp_temps.size();
+	size_t input_size = temp_temps.size() * sizeof(mytype);
+	size_t nr_groups = input / local_size;
 
-	// Sets sizes of output
-	std::vector<double> min(1);
-	size_t outputSize = sizeof(double);
+	std::vector<mytype> avg(1);
+	size_t output_size = avg.size()*sizeof(mytype);
 
-	// Sets the input and outout buffers
-	cl::Buffer inputBuffer(ctxt, CL_MEM_READ_ONLY, inputSize);
-	cl::Buffer output(ctxt, CL_MEM_READ_WRITE, outputSize);
+	cl::Buffer input_buffer(ctxt, CL_MEM_READ_ONLY, input_size);
+	cl::Buffer output_buffer(ctxt, CL_MEM_READ_WRITE, output_size);
 
-	// Moves buffer to the GPU
-	q.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &tempTempTemp[0]);
-	q.enqueueFillBuffer(output, INT_MAX, 0, outputSize);
+	q.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, input_size, &temp_temps[0]);
+	q.enqueueFillBuffer(output_buffer, 0, 0, output_size);
 
-	// Sets the kernel and the arguments for the kernel
-	cl::Kernel kernel = cl::Kernel(prg, "Min");
-	kernel.setArg(0, inputBuffer);
-	kernel.setArg(1, output);
-	kernel.setArg(2, cl::Local(localSize * sizeof(double)));
+	cl::Kernel kernel = cl::Kernel(prg, "average");
+	kernel.setArg(0, input_buffer);
+	kernel.setArg(1, output_buffer);
+	kernel.setArg(2, cl::Local(local_size * sizeof(mytype)));
 
-	// Runs the kernel with a thread for each element of the input with workgroups sized the same as local size
-	q.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElements), cl::NDRange(localSize));
+	q.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input), cl::NDRange(local_size));
 
-	// Reads the output from GPU to CPU
-	q.enqueueReadBuffer(output, CL_TRUE, 0, outputSize, &min[0]);
+	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &avg[0]);
 
-	// Prints and retunes Minimum value
-	std::cout << "Minimum: " << (double)min.at(0) / (double)10 << endl;
-	return min.at(0);
+	return ((float)avg[0]/(float)10) / (float)temp_temps.size();
 }
 
-double maximum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
-{
-	return 0.0;
-}
-
-double average(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
-{
-	return 0.0;
-}
-
-double standard_deviation(cl::Context ctxt, cl::CommandQueue q, cl::Program prg, double avg)
+float standard_deviation(cl::Context ctxt, cl::CommandQueue q, cl::Program prg, float avg)
 {
 	return 0.0;
 }
