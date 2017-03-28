@@ -87,6 +87,7 @@ __kernel void sort_bitonic_asc(__global int* A) {
 	int gid = get_global_id(0);
 	int gsize = get_global_size(0);
 
+
 	for (int i = 1; i < gsize/2; i*=2) {
 		if (gid % (i*4) < i*2)
 			bitonic_merge(gid, A, i*2, false);
@@ -111,6 +112,13 @@ __kernel void sort_bitonic_desc(__global int* A) {
 	}
 
 	bitonic_merge(gid, A, gsize, true);
+}
+
+__kernel void standard_dev(__global const int* A, __global int* B, float avgVal, __local float* std_dev) {
+	int gid = get_global_id(0);
+	int lid = get_local_id(0);
+
+	B[gid] = pow((A[gid] - avgVal), 2);
 }
 
 //__kernel void average(__global const float* A, __global float* B, __local float* local_holder) {

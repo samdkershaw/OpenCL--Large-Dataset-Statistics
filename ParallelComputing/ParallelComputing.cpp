@@ -6,6 +6,7 @@
 
 //#define DATASET_LENGTH 18732
 #define DATASET_LENGTH 1873106
+//#define DATASET_LENGTH 20
 
 #include <iostream>
 #include <vector>
@@ -23,7 +24,7 @@ void algorithmOne();
 void readDataFromFile(std::string);
 float minimum(cl::Context, cl::CommandQueue, cl::Program);
 float maximum(cl::Context, cl::CommandQueue, cl::Program);
-float average(cl::Context, cl::CommandQueue, cl::Program);
+float average(cl::Context, cl::CommandQueue, cl::Program, const std::vector<int>&);
 float standard_deviation(cl::Context, cl::CommandQueue, cl::Program, float);
 
 typedef int mytype;
@@ -103,7 +104,7 @@ void algorithmOne()
 		std::cout << "--> Minimum Value: " << min_val << std::endl;
 		float max = maximum(context, queue, program);
 		std::cout << "--> Maximum Value: " << max << std::endl;
-		float avg = average(context, queue, program);
+		float avg = average(context, queue, program, std::vector<int>());
 		std::cout << "--> Average Value: " << avg << std::endl;
 		float standard_dev = standard_deviation(context, queue, program, avg);
 		std::cout << "--> Standard Deviation: " << standard_dev << std::endl;
@@ -113,7 +114,6 @@ void algorithmOne()
 	catch (cl::Error err) {
 		std::cerr << err.what() << std::endl;
 	}
-	system("pause");
 }
 
 void readDataFromFile(std::string filePath)
@@ -168,7 +168,7 @@ void readDataFromFile(std::string filePath)
 					count++;
 					break;
 				case 5:
-					temps[lineCount] = stod(item);
+					temps[lineCount] = stof(item);
 					count = 0;
 					break;
 				default:
@@ -267,9 +267,10 @@ float maximum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
 	return (float)max_val[0];
 }
 
-float average(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
+float average(cl::Context ctxt, cl::CommandQueue q, cl::Program prg, const vector<int>& vec=vector<int>())
 {
-	std::vector<mytype> temp_temps = temps;
+	std::vector<mytype> temp_temps = (vec.size() == 0) ? temps : vec;
+
 	size_t local_size = 128;
 	size_t padding_size = temp_temps.size() % local_size;
 
@@ -310,7 +311,7 @@ float standard_deviation(cl::Context ctxt, cl::CommandQueue q, cl::Program prg, 
 	size_t padding_size = temp_temps.size() % local_size;
 
 	if (padding_size) {
-		std::vector<mytype> temp(local_size - padding_size, 0);
+		std::vector<mytype> temp(local_size - padding_size, FLT_MAX);
 		temp_temps.insert(temp_temps.end(), temp.begin(), temp.end());
 	}
 
@@ -318,22 +319,31 @@ float standard_deviation(cl::Context ctxt, cl::CommandQueue q, cl::Program prg, 
 	size_t input_size = temp_temps.size() * sizeof(mytype);
 	size_t nr_groups = input / local_size;
 
-	std::vector<mytype> sigma(1);
+	std::vector<mytype> sigma(DATASET_LENGTH);
 	size_t output_size = sigma.size() * sizeof(mytype);
 
 	cl::Buffer input_buffer(ctxt, CL_MEM_READ_ONLY, input_size);
 	cl::Buffer output_buffer(ctxt, CL_MEM_READ_WRITE, output_size);
 
 	q.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, input_size, &temp_temps[0]);
-	q.enqueueFillBuffer(output_buffer, 0, 0, output_size);
+	q.enqueueFillBuffer(output_buffer, FLT_MAX, 0, output_size);
 
 	cl::Kernel kernel = cl::Kernel(prg, "standard_dev");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
-	kernel.setArg(2, cl::Local(local_size * sizeof(mytype)));
+	kernel.setArg(2, avg);
+	kernel.setArg(3, cl::Local(local_size * sizeof(mytype)));
 
 	q.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input), cl::NDRange(local_size));
 
 	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &sigma[0]);
-	return 0.0;
+
+	std::cout << "Average Given: " << avg << std::endl;
+	std::cout << "Squared Difference: " << sigma[5173] << std::endl;
+
+	float stage_three_avg = average(ctxt, q, prg, sigma);
+
+	std::cout << "Stage 3 avg: " << stage_three_avg << std::endl;
+
+	return sqrt(stage_three_avg);
 }
