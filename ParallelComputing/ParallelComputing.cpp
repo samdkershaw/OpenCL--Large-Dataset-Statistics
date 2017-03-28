@@ -4,7 +4,8 @@
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #define __CL_ENABLE_EXCEPTIONS
 
-#define DATASET_LENGTH 18732
+//#define DATASET_LENGTH 18732
+#define DATASET_LENGTH 1873106
 
 #include <iostream>
 #include <vector>
@@ -61,7 +62,7 @@ int main()
 
 void algorithmOne()
 {
-	int platform_id = 1;
+	int platform_id = 0;
 	int device_id = 0;
 
 	try {
@@ -96,10 +97,10 @@ void algorithmOne()
 		temps.resize(DATASET_LENGTH);
 		std::cout << "Done." << std::endl;
 
-		readDataFromFile("temp_lincolnshire_short.txt");
+		readDataFromFile("temp_lincolnshire.txt");
 		
-		float min = minimum(context, queue, program);
-		std::cout << "--> Minimum Value: " << min << std::endl;
+		float min_val = minimum(context, queue, program);
+		std::cout << "--> Minimum Value: " << min_val << std::endl;
 		float max = maximum(context, queue, program);
 		std::cout << "--> Maximum Value: " << max << std::endl;
 		float avg = average(context, queue, program);
@@ -126,10 +127,64 @@ void readDataFromFile(std::string filePath)
 	int lineCount = 0;
 
 	std::cout << "--> Vector Size: " << temps.size() << std::endl;
+	
+	if (txtFile.is_open())
+	{
+		std::string item, line;
 
-	for (int i = 0; i < DATASET_LENGTH; i++) {
-		txtFile >> locations[i] >> years[i] >> months[i] >> days[i] >> times[i] >> temps[i];
+		std::cout << "--> Reading from '" << filePath << "'...";
+
+		while (getline(txtFile, line))
+		{
+			std::string location;
+			stringstream _line = stringstream(line);
+
+			int count = 0;
+			while (getline(_line, item, ' '))
+			{
+				switch (count)
+				{
+				case 0:
+					//location
+					locations[lineCount] = item;
+					count++;
+					break;
+				case 1:
+					//year
+					years[lineCount] = stoi(item);
+					count++;
+					break;
+				case 2:
+					//month
+					months[lineCount] = stoi(item);
+					count++;
+					break;
+				case 3:
+					days[lineCount] = stoi(item);
+					count++;
+					break;
+				case 4:
+					times[lineCount] = item;
+					count++;
+					break;
+				case 5:
+					temps[lineCount] = stod(item);
+					count = 0;
+					break;
+				default:
+					count = 0;
+					break;
+				}
+			}
+
+			lineCount++;
+		}
 	}
+	else {
+		std::cout << "Couldn't open the file!!";
+	}
+
+	txtFile.close();
 
 	/*while (txtFile >> location >> year >> month >> day >> time >> temp) {
 		locations.push_back(location);
@@ -140,28 +195,82 @@ void readDataFromFile(std::string filePath)
 		temps.push_back(temp);
 	}*/
 
-	txtFile.close();
-
-	std::cout << "\rRead " << DATASET_LENGTH << " lines in successfully." << std::endl;
-	std::cout << "--> Test: " << temps[DATASET_LENGTH-1] << std::endl;
-	system("pause");
+	std::cout << "\r--> Read " << DATASET_LENGTH << " lines from '" << filePath << "' successfully." << std::endl;
 }
 
 float minimum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
 {
-	return 0.0;
+	std::vector<mytype> temp_temps = temps;
+	size_t local_size = 128;
+	size_t padding_size = temp_temps.size() % local_size;
+
+	if (padding_size) {
+		std::vector<mytype> temp(local_size - padding_size, INT_MAX);
+		temp_temps.insert(temp_temps.end(), temp.begin(), temp.end());
+	}
+
+	size_t input = temp_temps.size();
+	size_t input_size = temp_temps.size() * sizeof(mytype);
+
+	std::vector<mytype> min_val(1);
+	size_t output_size = min_val.size() * sizeof(mytype);
+
+	cl::Buffer input_buffer(ctxt, CL_MEM_READ_ONLY, input_size);
+	cl::Buffer output_buffer(ctxt, CL_MEM_READ_WRITE, output_size);
+
+	q.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, input_size, &temp_temps[0]);
+	q.enqueueFillBuffer(output_buffer, INT_MAX, 0, output_size);
+
+	cl::Kernel kernel = cl::Kernel(prg, "minimum");
+	kernel.setArg(0, input_buffer);
+	kernel.setArg(1, output_buffer);
+	kernel.setArg(2, cl::Local(local_size * sizeof(mytype)));
+
+	q.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input), cl::NDRange(local_size));
+
+	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &min_val[0]);
+
+	return min_val[0];
 }
 
 float maximum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
 {
-	return 0.0;
+	std::vector<mytype> temp_temps = temps;
+	size_t local_size = 128;
+	size_t padding_size = temp_temps.size() % local_size;
+
+	if (padding_size) {
+		std::vector<mytype> temp(local_size - padding_size, INT_MIN);
+		temp_temps.insert(temp_temps.end(), temp.begin(), temp.end());
+	}
+
+	size_t input = temp_temps.size();
+	size_t input_size = temp_temps.size() * sizeof(mytype);
+
+	std::vector<mytype> max_val(1);
+	size_t output_size = max_val.size() * sizeof(mytype);
+
+	cl::Buffer input_buffer(ctxt, CL_MEM_READ_ONLY, input_size);
+	cl::Buffer output_buffer(ctxt, CL_MEM_READ_WRITE, output_size);
+
+	q.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, input_size, &temp_temps[0]);
+	q.enqueueFillBuffer(output_buffer, INT_MIN, 0, output_size);
+
+	cl::Kernel kernel = cl::Kernel(prg, "maximum");
+	kernel.setArg(0, input_buffer);
+	kernel.setArg(1, output_buffer);
+	kernel.setArg(2, cl::Local(local_size * sizeof(mytype)));
+
+	q.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input), cl::NDRange(local_size));
+
+	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &max_val[0]);
+	return (float)max_val[0];
 }
 
 float average(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
 {
 	std::vector<mytype> temp_temps = temps;
-	std::cout << "temp_temps.size() = " << temp_temps.size() << std::endl;
-	size_t local_size = 256;
+	size_t local_size = 128;
 	size_t padding_size = temp_temps.size() % local_size;
 
 	if (padding_size) {
@@ -182,7 +291,7 @@ float average(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
 	q.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, input_size, &temp_temps[0]);
 	q.enqueueFillBuffer(output_buffer, 0, 0, output_size);
 
-	cl::Kernel kernel = cl::Kernel(prg, "average");
+	cl::Kernel kernel = cl::Kernel(prg, "sum");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
 	kernel.setArg(2, cl::Local(local_size * sizeof(mytype)));
@@ -191,10 +300,40 @@ float average(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
 
 	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &avg[0]);
 
-	return ((float)avg[0]/(float)10) / (float)temp_temps.size();
+	return (float)avg[0] / (float)temp_temps.size();
 }
 
 float standard_deviation(cl::Context ctxt, cl::CommandQueue q, cl::Program prg, float avg)
 {
+	std::vector<mytype> temp_temps = temps;
+	size_t local_size = 128;
+	size_t padding_size = temp_temps.size() % local_size;
+
+	if (padding_size) {
+		std::vector<mytype> temp(local_size - padding_size, 0);
+		temp_temps.insert(temp_temps.end(), temp.begin(), temp.end());
+	}
+
+	size_t input = temp_temps.size();
+	size_t input_size = temp_temps.size() * sizeof(mytype);
+	size_t nr_groups = input / local_size;
+
+	std::vector<mytype> sigma(1);
+	size_t output_size = sigma.size() * sizeof(mytype);
+
+	cl::Buffer input_buffer(ctxt, CL_MEM_READ_ONLY, input_size);
+	cl::Buffer output_buffer(ctxt, CL_MEM_READ_WRITE, output_size);
+
+	q.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, input_size, &temp_temps[0]);
+	q.enqueueFillBuffer(output_buffer, 0, 0, output_size);
+
+	cl::Kernel kernel = cl::Kernel(prg, "standard_dev");
+	kernel.setArg(0, input_buffer);
+	kernel.setArg(1, output_buffer);
+	kernel.setArg(2, cl::Local(local_size * sizeof(mytype)));
+
+	q.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input), cl::NDRange(local_size));
+
+	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &sigma[0]);
 	return 0.0;
 }

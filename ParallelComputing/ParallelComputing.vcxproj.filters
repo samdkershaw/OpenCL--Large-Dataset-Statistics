@@ -40,8 +40,8 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="kernel.cl">
+    <Intel_OpenCL_Build_Rules Include="kernel.cl">
       <Filter>OpenCL Files</Filter>
-    </None>
+    </Intel_OpenCL_Build_Rules>
   </ItemGroup>
 </Project>
