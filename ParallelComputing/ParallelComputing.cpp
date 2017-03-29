@@ -170,15 +170,15 @@ void readDataFromFile(std::string filePath)
 				case 5:
 					temps[lineCount] = stof(item);
 					count = 0;
+					lineCount++;
 					break;
 				default:
 					count = 0;
 					break;
 				}
 			}
-
-			lineCount++;
 		}
+		std::cout << "\r--> Read " << lineCount << " lines from '" << filePath << "' successfully." << std::endl;
 	}
 	else {
 		std::cout << "Couldn't open the file!!";
@@ -194,8 +194,6 @@ void readDataFromFile(std::string filePath)
 		times.push_back(time);
 		temps.push_back(temp);
 	}*/
-
-	std::cout << "\r--> Read " << DATASET_LENGTH << " lines from '" << filePath << "' successfully." << std::endl;
 }
 
 float minimum(cl::Context ctxt, cl::CommandQueue q, cl::Program prg)
@@ -338,12 +336,42 @@ float standard_deviation(cl::Context ctxt, cl::CommandQueue q, cl::Program prg, 
 
 	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &sigma[0]);
 
-	std::cout << "Average Given: " << avg << std::endl;
-	std::cout << "Squared Difference: " << sigma[5173] << std::endl;
+	float avg_sq_diffs = average(ctxt, q, prg, sigma);
 
-	float stage_three_avg = average(ctxt, q, prg, sigma);
+	return sqrt(avg_sq_diffs);
+}
 
-	std::cout << "Stage 3 avg: " << stage_three_avg << std::endl;
+float median(cl::Context ctxt, cl::CommandQueue q, cl::Program prg) {
+	std::vector<mytype> temp_temps = temps;
+	size_t local_size = 128;
+	size_t padding_size = temp_temps.size() % local_size;
 
-	return sqrt(stage_three_avg);
+	if (padding_size) {
+		std::vector<mytype> temp(local_size - padding_size, INT_MAX);
+		temp_temps.insert(temp_temps.end(), temp.begin(), temp.end());
+	}
+
+	size_t input = temp_temps.size();
+	size_t input_size = temp_temps.size() * sizeof(mytype);
+
+	std::vector<mytype> med(DATASET_LENGTH);
+	size_t output_size = med.size() * sizeof(mytype);
+
+	cl::Buffer input_buffer(ctxt, CL_MEM_READ_ONLY, input_size);
+	cl::Buffer output_buffer(ctxt, CL_MEM_READ_WRITE, output_size);
+
+	q.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, input_size, &temp_temps[0]);
+	q.enqueueFillBuffer(output_buffer, INT_MAX, 0, output_size);
+
+	cl::Kernel kernel = cl::Kernel(prg, "sort_asc");
+	kernel.setArg(0, input_buffer);
+	kernel.setArg(1, output_buffer);
+	kernel.setArg(2, cl::Local(local_size * sizeof(mytype)));
+
+	cl::Event profiler;
+	q.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input), cl::NDRange(local_size), NULL, &profiler);
+
+	q.enqueueReadBuffer(output_buffer, CL_TRUE, 0, output_size, &med[0]);
+
+	return 0.0;
 }
